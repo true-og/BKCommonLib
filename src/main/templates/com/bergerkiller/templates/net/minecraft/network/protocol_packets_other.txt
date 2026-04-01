@@ -307,9 +307,6 @@ class PacketPlayInUseEntity extends Packet {
     #require net.minecraft.network.protocol.game.PacketPlayInUseEntity private final PacketPlayInUseEntity.UseType action;
   #if version >= 1.19.4
     #require net.minecraft.network.protocol.game.PacketPlayInUseEntity public net.minecraft.network.protocol.game.ServerboundInteractPacket.ActionType getActionType();
-    #require net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAction private final readonly net.minecraft.world.EnumHand interactHand:hand;
-    #require net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAtLocationAction private final readonly net.minecraft.world.EnumHand interactAtHand:hand;
-    #require net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAtLocationAction private final readonly net.minecraft.world.phys.Vec3D interactAtLocation:location;
     #require net.minecraft.network.protocol.game.PacketPlayInUseEntity public String getActionName() {
         return instance.getActionType().name();
     }
@@ -345,13 +342,39 @@ class PacketPlayInUseEntity extends Packet {
   #endif
         if (name.equals("INTERACT")) {
   #if version >= 1.19.4
-            hand = ((net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAction) instance#action)#interactHand;
+            Object action = instance#action;
+            try {
+                java.lang.reflect.Field field = action.getClass().getDeclaredField("hand");
+                field.setAccessible(true);
+                hand = (EnumHand) field.get(action);
+            } catch (Throwable t) {
+                try {
+                    java.lang.reflect.Method method = action.getClass().getDeclaredMethod("hand", new Class[0]);
+                    method.setAccessible(true);
+                    hand = (EnumHand) method.invoke(action, new Object[0]);
+                } catch (Throwable t2) {
+                    hand = null;
+                }
+            }
   #else
             hand = useAction#interactHand;
   #endif
         } else if (name.equals("INTERACT_AT")) {
   #if version >= 1.19.4
-            hand = ((net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAtLocationAction) instance#action)#interactAtHand;
+            Object action = instance#action;
+            try {
+                java.lang.reflect.Field field = action.getClass().getDeclaredField("hand");
+                field.setAccessible(true);
+                hand = (EnumHand) field.get(action);
+            } catch (Throwable t) {
+                try {
+                    java.lang.reflect.Method method = action.getClass().getDeclaredMethod("hand", new Class[0]);
+                    method.setAccessible(true);
+                    hand = (EnumHand) method.invoke(action, new Object[0]);
+                } catch (Throwable t2) {
+                    hand = null;
+                }
+            }
   #else
             hand = useAction#interactAtHand;
   #endif
@@ -365,7 +388,20 @@ class PacketPlayInUseEntity extends Packet {
     public (org.bukkit.util.Vector) Vec3D getInteractAtPosition() {
   #if version >= 1.19.4
         if (instance.getActionType().name().equals("INTERACT_AT")) {
-            return ((net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAtLocationAction) instance#action)#interactAtLocation;
+            Object action = instance#action;
+            try {
+                java.lang.reflect.Field field = action.getClass().getDeclaredField("location");
+                field.setAccessible(true);
+                return (Vec3D) field.get(action);
+            } catch (Throwable t) {
+                try {
+                    java.lang.reflect.Method method = action.getClass().getDeclaredMethod("location", new Class[0]);
+                    method.setAccessible(true);
+                    return (Vec3D) method.invoke(action, new Object[0]);
+                } catch (Throwable t2) {
+                    return null;
+                }
+            }
         } else {
             return null;
         }
