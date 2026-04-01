@@ -5,7 +5,7 @@ plugins {
     eclipse
     id("java-library")
     id("com.bergerkiller.mountiplex") version "2.93"
-    id("com.github.johnrengelman.shadow") version "7.1.2"
+    id("com.gradleup.shadow") version "8.3.9"
     id("maven-publish")
 }
 
