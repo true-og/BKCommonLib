@@ -21,9 +21,13 @@ public class CommonDisabledEntity {
             entity = new ClassInterceptor() {
                 @Override
                 protected Invoker<?> getCallback(Method method) {
-                    if (method.getName().equals("a") && method.getParameterCount() == 1) {
+                    if (method.getParameterCount() == 1) {
                         Class<?> argType = method.getParameters()[0].getType();
-                        if (DataWatcherObjectHandle.T.isAssignableFrom(argType)) {
+                        if (method.getName().equals("a") ||
+                            method.getName().equals("onSyncedDataUpdated") ||
+                            DataWatcherObjectHandle.T.isAssignableFrom(argType) ||
+                            argType.getName().equals("net.minecraft.network.syncher.EntityDataAccessor"))
+                        {
                             return new NullInvoker<Object>();
                         }
                     }

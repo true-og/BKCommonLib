@@ -114,6 +114,9 @@ class LightingHandler_1_14 implements LightingHandler {
 
         // Get PRE/POST_UPDATE constants
         Class<?> updateType = CommonUtil.getClass("net.minecraft.server.level.LightEngineThreaded$Update");
+        if (updateType == null) {
+            updateType = CommonUtil.getClass("net.minecraft.server.level.ThreadedLevelLightEngine$TaskType");
+        }
         {
             Object preUpdate = null;
             Object postUpdate = null;
@@ -136,8 +139,19 @@ class LightingHandler_1_14 implements LightingHandler {
         }
 
         // Get the private schedule method of the engine
-        this.light_engine_schedule = CommonUtil.getClass("net.minecraft.server.level.LightEngineThreaded").getDeclaredMethod("a",
-                int.class, int.class, IntSupplier.class, updateType, Runnable.class);
+        Class<?> threadedLightEngineType = CommonUtil.getClass("net.minecraft.server.level.LightEngineThreaded");
+        if (threadedLightEngineType == null) {
+            threadedLightEngineType = CommonUtil.getClass("net.minecraft.server.level.ThreadedLevelLightEngine");
+        }
+        Method lightEngineScheduleMethod;
+        try {
+            lightEngineScheduleMethod = threadedLightEngineType.getDeclaredMethod("a",
+                    int.class, int.class, IntSupplier.class, updateType, Runnable.class);
+        } catch (NoSuchMethodException ex) {
+            lightEngineScheduleMethod = threadedLightEngineType.getDeclaredMethod("addTask",
+                    int.class, int.class, IntSupplier.class, updateType, Runnable.class);
+        }
+        this.light_engine_schedule = lightEngineScheduleMethod;
 
         // Make all accessible
         this.light_layer_block.setAccessible(true);

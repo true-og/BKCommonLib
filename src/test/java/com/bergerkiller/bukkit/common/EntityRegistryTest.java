@@ -14,13 +14,15 @@ public class EntityRegistryTest {
 
     @Test
     public void loadCommonEntityTypes() {
+        CommonBootstrap.initServer();
+
         // Initialize the entity lists first
         CommonUtil.loadClass(CommonEntityType.class);
     }
 
     @Test
     public void testEntityTypesConversion() {
-        CommonBootstrap.initCommonServerAssertCompatibility();
+        CommonBootstrap.initServer();
 
         // Test EntityTypes <> Class<? extends Entity> conversion logic
         // This applies to MC 1.13 and onwards only

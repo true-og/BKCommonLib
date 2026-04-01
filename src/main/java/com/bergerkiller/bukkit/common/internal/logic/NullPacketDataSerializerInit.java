@@ -54,7 +54,10 @@ public class NullPacketDataSerializerInit {
         try {
             Class<?> dataSerializerType = Resolver.loadClass("net.minecraft.network.PacketDataSerializer", false);
             if (dataSerializerType == null) {
-                throw new IllegalStateException("PacketDataSerializer class not found in server");
+                dataSerializerType = Resolver.loadClass("net.minecraft.network.FriendlyByteBuf", false);
+            }
+            if (dataSerializerType == null) {
+                throw new IllegalStateException("PacketDataSerializer/FriendlyByteBuf class not found in server");
             }
 
             final ExtendedClassWriter<Object> cw = ExtendedClassWriter.builder(dataSerializerType).setExactName(CLASS_NAME).build();

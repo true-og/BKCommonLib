@@ -1,4 +1,8 @@
+import groovy.json.JsonSlurper
+import java.util.zip.ZipFile
+
 plugins {
+    eclipse
     id("java-library")
     id("com.bergerkiller.mountiplex") version "2.93"
     id("com.github.johnrengelman.shadow") version "7.1.2"
@@ -6,9 +10,113 @@ plugins {
 }
 
 val buildNumber = System.getenv("BUILD_NUMBER") ?: "NO-CI"
+val serverDependencyVersion = libs.versions.spigot.get()
+val localPurpurServerJar = file(
+    "${System.getProperty("user.home")}/.m2/repository/org/purpurmc/purpur/purpur-server/" +
+            "$serverDependencyVersion/purpur-server-$serverDependencyVersion-mojang-mapped.jar"
+)
+val localPurpurApiJar = file(
+    "${System.getProperty("user.home")}/.m2/repository/org/purpurmc/purpur/purpur-api/" +
+            "$serverDependencyVersion/purpur-api-$serverDependencyVersion.jar"
+)
+val localPurpurDevBundleZip = file(
+    "${System.getProperty("user.home")}/.m2/repository/org/purpurmc/purpur/dev-bundle/" +
+            "$serverDependencyVersion/dev-bundle-$serverDependencyVersion.zip"
+)
+val localBungeeCordChatJar = file(
+    "${System.getProperty("user.home")}/.m2/repository/net/md-5/bungeecord-chat/" +
+            "1.16-R0.4/bungeecord-chat-1.16-R0.4.jar"
+)
+
+fun readPurpurDevBundleDependencies(section: String): List<String> {
+    if (!localPurpurDevBundleZip.isFile) {
+        return emptyList()
+    }
+
+    return ZipFile(localPurpurDevBundleZip).use { zip ->
+        val configEntry = zip.getEntry("config.json") ?: return@use emptyList()
+        val config = zip.getInputStream(configEntry).reader().use { reader ->
+            @Suppress("UNCHECKED_CAST")
+            JsonSlurper().parse(reader) as Map<String, Any?>
+        }
+        @Suppress("UNCHECKED_CAST")
+        val buildData = config["buildData"] as? Map<String, Any?> ?: return@use emptyList()
+        @Suppress("UNCHECKED_CAST")
+        (buildData[section] as? List<String>).orEmpty()
+    }
+}
+
+val purpurRuntimeDependencies = readPurpurDevBundleDependencies("runtimeDependencies").filterNot {
+    it.startsWith("org.purpurmc.purpur:")
+}
+
+fun localMavenArtifactJar(notation: String): File? {
+    val parts = notation.split(':')
+    if (parts.size < 3) {
+        return null
+    }
+
+    val groupPath = parts[0].replace('.', '/')
+    val artifact = parts[1]
+    val version = parts[2]
+    val classifier = if (parts.size >= 4) parts[3] else null
+    val jarName = buildString {
+        append(artifact).append('-').append(version)
+        if (classifier != null) {
+            append('-').append(classifier)
+        }
+        append(".jar")
+    }
+
+    val jarFile = file(
+        "${System.getProperty("user.home")}/.m2/repository/$groupPath/$artifact/$version/$jarName"
+    )
+    if (jarFile.isFile) {
+        return jarFile
+    }
+
+    fun versionPrefix(version: String): String {
+        val major = version.takeWhile { it.isDigit() }
+        return if (major.isNotEmpty()) "$major." else version
+    }
+
+    // Fall back to the newest locally cached version for this artifact when the exact
+    // bundle coordinate is unavailable in ~/.m2, but keep it in the same major line.
+    // This avoids mixing 1.19.4 server jars with 1.20+ Mojang library ABIs.
+    val artifactDir = file("${System.getProperty("user.home")}/.m2/repository/$groupPath/$artifact")
+    val preferredCandidates = artifactDir.listFiles()
+        ?.filter { it.isDirectory }
+        ?.filter { it.name == version || it.name.startsWith(versionPrefix(version)) }
+        ?.sortedByDescending { it.name }
+        .orEmpty()
+    val fallbackCandidates = artifactDir.listFiles()
+        ?.filter { it.isDirectory }
+        ?.sortedByDescending { it.name }
+        .orEmpty()
+    for (candidate in preferredCandidates + fallbackCandidates) {
+        val candidateJar = file(
+            "${candidate.absolutePath}/$artifact-${candidate.name}" +
+                    (if (classifier != null) "-$classifier" else "") +
+                    ".jar"
+        )
+        if (candidateJar.isFile) {
+            return candidateJar
+        }
+    }
+
+    return null
+}
+
+val localPurpurRuntimeDependencyFiles = purpurRuntimeDependencies.mapNotNull(::localMavenArtifactJar)
 
 group = "com.bergerkiller.bukkit"
 version = "1.19.4-v2"
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
 
 repositories {
     mavenLocal {
@@ -17,10 +125,13 @@ repositories {
         content {
             includeGroup("org.spigotmc")
             includeGroup("com.mojang")
+            includeGroup("org.purpurmc.purpur")
         }
     }
     mavenCentral()
+    maven("https://maven.fabricmc.net/")
     maven("https://hub.spigotmc.org/nexus/content/groups/public/")
+    maven("https://jitpack.io")
 
     // Repo for TeamBergerhealer plugins, modules and several of its (soft) dependencies. Also used for:
     // - Milkbowl Vault
@@ -94,14 +205,31 @@ dependencies {
     // Test dependencies
     //
 
-    testImplementation(libs.spigot)
+    testImplementation(files(localPurpurApiJar))
+    testImplementation(libs.netty.all)
+    testImplementation(libs.log4j.api)
+    testImplementation(libs.log4j.core)
+    testImplementation("com.google.guava:guava:31.1-jre")
+    testImplementation("org.yaml:snakeyaml:1.33")
+    testImplementation(files(localBungeeCordChatJar))
+    testImplementation(libs.adventure.api)
+    testRuntimeOnly("net.fabricmc:mapping-io:0.4.1")
+    testRuntimeOnly("com.github.Carleslc.Simple-YAML:Simple-Yaml:1.8.4")
+    testRuntimeOnly("com.github.Carleslc.Simple-YAML:Simple-Configuration:1.8.4")
+    testRuntimeOnly("net.kyori:adventure-key:4.13.1")
+    testRuntimeOnly("net.kyori:adventure-text-logger-slf4j:4.13.1")
+    testRuntimeOnly("net.kyori:adventure-text-minimessage:4.13.1")
+    testRuntimeOnly("net.kyori:adventure-text-serializer-gson:4.13.1")
+    testRuntimeOnly("net.kyori:adventure-text-serializer-legacy:4.13.1")
+    testRuntimeOnly("net.kyori:adventure-text-serializer-plain:4.13.1")
+    testRuntimeOnly("com.github.Carleslc.Simple-YAML:Simple-Yaml:1.8.4")
+    testRuntimeOnly("com.github.Carleslc.Simple-YAML:Simple-Configuration:1.8.4")
+    if (localPurpurServerJar.isFile) {
+        testImplementation(files(localPurpurServerJar))
+    }
+    testRuntimeOnly(files(localPurpurRuntimeDependencyFiles))
     testImplementation(libs.mockito.core)
     testImplementation(libs.junit)
-}
-
-java {
-    withJavadocJar()
-    withSourcesJar()
 }
 
 publishing {
@@ -128,6 +256,10 @@ mountiplex {
 }
 
 tasks {
+    named<Jar>("jar") {
+        enabled = false
+    }
+
     generateTemplateHandles {
         source.set("com/bergerkiller/templates/init.txt")
         target.set("com/bergerkiller/generated")
@@ -185,8 +317,10 @@ tasks {
             exclude(dependency("org.checkerframework:checker-qual"))
         }
 
-        destinationDirectory.set(buildDir)
-        archiveFileName.set("${project.name}-${project.version}-$buildNumber.jar")
+        destinationDirectory.set(layout.buildDirectory.dir("libs"))
+        archiveBaseName.set(project.name)
+        archiveVersion.set(project.version.toString())
+        archiveClassifier.set("")
 
         isPreserveFileTimestamps = false
         isReproducibleFileOrder = true

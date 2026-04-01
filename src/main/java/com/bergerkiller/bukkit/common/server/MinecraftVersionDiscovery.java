@@ -1,7 +1,9 @@
 package com.bergerkiller.bukkit.common.server;
 
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
@@ -53,7 +55,7 @@ class MinecraftVersionDiscovery {
 
         typeWorldVersion = tryLoadClass("net.minecraft.WorldVersion");
 
-        if (typeMinecraftServer != null) {
+        if (typeMinecraftServer != null && Bukkit.getServer() != null) {
             try {
                 getVersionMethod = Resolver.resolveAndGetDeclaredMethod(typeMinecraftServer, "getVersion");
                 if (!getVersionMethod.getReturnType().equals(String.class)) {
@@ -62,6 +64,8 @@ class MinecraftVersionDiscovery {
             } catch (NoSuchMethodException ex) {
                 /* 1.18 and later, or an unsupported server */
                 getVersionMethod = null;
+            } catch (Throwable t) {
+                getVersionMethod = null;
             }
         } else {
             getVersionMethod = null;
@@ -69,14 +73,22 @@ class MinecraftVersionDiscovery {
 
         typeGameVersion = tryLoadClass("com.mojang.bridge.game.GameVersion");
 
-        // Paper only
-        try {
-            getMinecraftVersionMethodBukkitServer = Server.class.getDeclaredMethod("getMinecraftVersion");
-            if (!getMinecraftVersionMethodBukkitServer.getReturnType().equals(String.class)) {
+        // Paper only. Avoid resolving Server API methods while running tests before a mock Bukkit
+        // server exists, because newer Paper signatures can reference optional classes not present
+        // on the bare test classpath yet.
+        if (Bukkit.getServer() != null) {
+            try {
+                getMinecraftVersionMethodBukkitServer = Server.class.getDeclaredMethod("getMinecraftVersion");
+                if (!getMinecraftVersionMethodBukkitServer.getReturnType().equals(String.class)) {
+                    getMinecraftVersionMethodBukkitServer = null;
+                }
+            } catch (NoSuchMethodException ex) {
+                /* Not paper or too old */
+                getMinecraftVersionMethodBukkitServer = null;
+            } catch (Throwable t) {
                 getMinecraftVersionMethodBukkitServer = null;
             }
-        } catch (NoSuchMethodException ex) {
-            /* Not paper or too old */
+        } else {
             getMinecraftVersionMethodBukkitServer = null;
         }
     }
@@ -162,6 +174,14 @@ class MinecraftVersionDiscovery {
             }
         }
 
+        // Under tests on newer servers, a live Bukkit server may not yet exist and some runtime
+        // classes needed by SharedConstants/MinecraftVersion probing may not be initialized.
+        // In that case, fall back to the bundled server metadata.
+        String fromVersionJson = detectUsingVersionJsonResource();
+        if (fromVersionJson != null) {
+            return fromVersionJson;
+        }
+
         // Last-ditch effort of initializing a new DedicatedServer instance and calling the method on that
         // This will likely fail, but we've tried.
         if (getVersionMethod != null) {
@@ -243,6 +263,44 @@ class MinecraftVersionDiscovery {
             }
         }
         return alternative;
+    }
+
+    private String detectUsingVersionJsonResource() {
+        try (InputStream input = MinecraftVersionDiscovery.class.getClassLoader().getResourceAsStream("version.json")) {
+            if (input == null) {
+                return null;
+            }
+
+            String json = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            String version = readVersionJsonField(json, "\"name\"");
+            if (version == null) {
+                version = readVersionJsonField(json, "\"id\"");
+            }
+            return (version != null && version.contains(".")) ? version : null;
+        } catch (Throwable t) {
+            Logging.LOGGER.log(Level.WARNING, "Failed to read version.json metadata", t);
+            return null;
+        }
+    }
+
+    private static String readVersionJsonField(String json, String fieldName) {
+        int keyIndex = json.indexOf(fieldName);
+        if (keyIndex == -1) {
+            return null;
+        }
+        int colonIndex = json.indexOf(':', keyIndex + fieldName.length());
+        if (colonIndex == -1) {
+            return null;
+        }
+        int valueStart = json.indexOf('"', colonIndex + 1);
+        if (valueStart == -1) {
+            return null;
+        }
+        int valueEnd = json.indexOf('"', valueStart + 1);
+        if (valueEnd == -1) {
+            return null;
+        }
+        return json.substring(valueStart + 1, valueEnd);
     }
 
     private String getGameVersionName(Object gameVersion) throws VersionIdentificationFailureException {

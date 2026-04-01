@@ -2,7 +2,18 @@ package com.bergerkiller.bukkit.common.server.test;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.io.Reader;
 import java.util.concurrent.Executor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.script.AbstractScriptEngine;
+import javax.script.Bindings;
+import javax.script.ScriptContext;
+import javax.script.ScriptEngineFactory;
+import javax.script.ScriptException;
+import javax.script.SimpleBindings;
 
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -86,6 +97,73 @@ public abstract class TestServerFactory {
                     "SpigotConfig.config.set(\"world-settings.default.verbose\", Boolean.FALSE);\n" +
                     "return null;\n");
         }
+
+        Class<?> purpurConfigType = CommonUtil.getClass("org.purpurmc.purpur.PurpurConfig");
+        if (purpurConfigType != null) {
+            try {
+                org.bukkit.configuration.file.YamlConfiguration config =
+                        new DefaultSpigotYamlConfiguration();
+                config.set("settings.verbose", Boolean.FALSE);
+
+                Field configField = purpurConfigType.getDeclaredField("config");
+                configField.setAccessible(true);
+                configField.set(null, config);
+            } catch (Throwable t) {
+                throw new RuntimeException("Failed to initialize PurpurConfig", t);
+            }
+        }
+
+        Class<?> globalConfigurationType = CommonUtil.getClass("io.papermc.paper.configuration.GlobalConfiguration");
+        if (globalConfigurationType != null) {
+            try {
+                java.lang.reflect.Method getMethod = globalConfigurationType.getDeclaredMethod("get");
+                Object currentConfig = getMethod.invoke(null);
+                if (currentConfig == null) {
+                    Object config = instantiateConfigurationPart(globalConfigurationType, null);
+                    try {
+                        java.lang.reflect.Method setMethod = globalConfigurationType.getDeclaredMethod("set", globalConfigurationType);
+                        setMethod.setAccessible(true);
+                        setMethod.invoke(null, config);
+                    } catch (NoSuchMethodException ex) {
+                        Field instanceField = globalConfigurationType.getDeclaredField("instance");
+                        instanceField.setAccessible(true);
+                        instanceField.set(null, config);
+                    }
+                }
+            } catch (Throwable t) {
+                throw new RuntimeException("Failed to initialize Paper GlobalConfiguration", t);
+            }
+        }
+    }
+
+    private static Object instantiateConfigurationPart(Class<?> type, Object outerInstance) throws Throwable {
+        java.lang.reflect.Constructor<?> constructor;
+        Object instance;
+        if (type.getEnclosingClass() != null && !Modifier.isStatic(type.getModifiers())) {
+            constructor = type.getDeclaredConstructor(type.getEnclosingClass());
+            constructor.setAccessible(true);
+            instance = constructor.newInstance(outerInstance);
+        } else {
+            constructor = type.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            instance = constructor.newInstance();
+        }
+
+        for (Field field : type.getFields()) {
+            if (Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive()) {
+                continue;
+            }
+            if (!field.getType().getName().startsWith("io.papermc.paper.configuration.")) {
+                continue;
+            }
+
+            field.setAccessible(true);
+            if (field.get(instance) == null) {
+                field.set(instance, instantiateConfigurationPart(field.getType(), instance));
+            }
+        }
+
+        return instance;
     }
 
     protected static void setField(Object instance, Class<?> declaringClass, String name, Object value) {
@@ -207,6 +285,44 @@ public abstract class TestServerFactory {
 
     protected static String getPackagePath(Class<?> type) {
         return type.getPackage().getName();
+    }
+
+    /**
+     * Purpur 1.19.4 expects a JavaScript engine on Entity.scriptEngine, but modern
+     * JDKs no longer ship one by default. Tests only need basic numeric expressions.
+     */
+    protected static final class DummyScriptEngine extends AbstractScriptEngine {
+        private static final Pattern NUMBER_PATTERN = Pattern.compile("-?\\d+(?:\\.\\d+)?");
+
+        @Override
+        public Object eval(String script, ScriptContext context) throws ScriptException {
+            if (script == null) {
+                return 0.0;
+            }
+
+            Matcher matcher = NUMBER_PATTERN.matcher(script);
+            if (matcher.find()) {
+                String number = matcher.group();
+                return number.contains(".") ? Double.parseDouble(number) : Integer.parseInt(number);
+            }
+
+            return 0.0;
+        }
+
+        @Override
+        public Object eval(Reader reader, ScriptContext context) throws ScriptException {
+            return 0.0;
+        }
+
+        @Override
+        public Bindings createBindings() {
+            return new SimpleBindings();
+        }
+
+        @Override
+        public ScriptEngineFactory getFactory() {
+            return null;
+        }
     }
 
     public static class ServerHook extends ClassHook<ServerHook> {

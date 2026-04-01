@@ -29,7 +29,9 @@ public abstract class MapDisplayMarkerApplier extends Template.Class<Template.Ha
      *         // Prepare arguments
      *         com.bergerkiller.bukkit.common.map.MapMarker marker = tile.getMarker(i);
      * 
-     * #if version >= 1.11
+     * #if version >= 1.18
+     *         MapIcon$Type type = MapIcon$Type.byIcon(marker.getType().id());
+     * #elseif version >= 1.11
      *         MapIcon$Type type = MapIcon$Type.a(marker.getType().id());
      * #endif
      * 

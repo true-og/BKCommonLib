@@ -45,7 +45,11 @@ class Entity {
 
         net.minecraft.world.entity.Entity vehicleHandle = (net.minecraft.world.entity.Entity) com.bergerkiller.bukkit.common.conversion.type.HandleConversion.toEntityHandle(instance);
         net.minecraft.world.entity.Entity passengerHandle = (net.minecraft.world.entity.Entity) com.bergerkiller.bukkit.common.conversion.type.HandleConversion.toEntityHandle(passenger);
+  #if version >= 1.18
+        if (vehicleHandle == null || passengerHandle == null || !passengerHandle.startRiding(vehicleHandle, true)) {
+  #else
         if (vehicleHandle == null || passengerHandle == null || !passengerHandle.a(vehicleHandle, true)) {
+  #endif
             return false;
         }
 

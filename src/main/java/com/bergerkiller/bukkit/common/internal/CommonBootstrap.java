@@ -738,6 +738,19 @@ public class CommonBootstrap {
             }
         }
 
+        // Mojang-mapped 1.19.4 renamed MapIcon to MapDecoration
+        try {
+            MPLType.getClassByName("net.minecraft.world.level.saveddata.maps.MapDecoration");
+            try {
+                MPLType.getClassByName("net.minecraft.world.level.saveddata.maps.MapIcon");
+            } catch (ClassNotFoundException ex) {
+                remappings.put("net.minecraft.world.level.saveddata.maps.MapIcon",
+                        "net.minecraft.world.level.saveddata.maps.MapDecoration");
+                remappings.put("net.minecraft.world.level.saveddata.maps.MapIcon$Type",
+                        "net.minecraft.world.level.saveddata.maps.MapDecoration$Type");
+            }
+        } catch (ClassNotFoundException ex) {}
+
         // If remappings exist, add a resolver for them
         if (!remappings.isEmpty()) {
             if (server instanceof CraftBukkitServer) {

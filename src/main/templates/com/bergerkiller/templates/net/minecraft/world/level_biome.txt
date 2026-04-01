@@ -9,7 +9,7 @@ class BiomeSettingsMobs {
 
     class BiomeSettingsMobs.SpawnRate {
 #if version >= 1.17
-        public (java.lang.Class<?>) EntityTypes entityClass:b;
+        public (java.lang.Class<?>) EntityTypes entityClass:type;
 #elseif version >= 1.16
         public (java.lang.Class<?>) EntityTypes entityClass:c;
 #elseif version >= 1.13

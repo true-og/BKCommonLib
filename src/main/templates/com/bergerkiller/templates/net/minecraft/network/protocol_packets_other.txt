@@ -305,6 +305,15 @@ class PacketPlayInUseEntity extends Packet {
     // It is incorrectly remapped to EnumEntityUseAction (!)
 #if version >= 1.17
     #require net.minecraft.network.protocol.game.PacketPlayInUseEntity private final PacketPlayInUseEntity.UseType action;
+  #if version >= 1.19.4
+    #require net.minecraft.network.protocol.game.PacketPlayInUseEntity public net.minecraft.network.protocol.game.ServerboundInteractPacket.ActionType getActionType();
+    #require net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAction private final readonly net.minecraft.world.EnumHand interactHand:hand;
+    #require net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAtLocationAction private final readonly net.minecraft.world.EnumHand interactAtHand:hand;
+    #require net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAtLocationAction private final readonly net.minecraft.world.phys.Vec3D interactAtLocation:location;
+    #require net.minecraft.network.protocol.game.PacketPlayInUseEntity public String getActionName() {
+        return instance.getActionType().name();
+    }
+  #else
     #require net.minecraft.network.protocol.game.PacketPlayInUseEntity.UseType public abstract (Enum) net.minecraft.network.protocol.game.PacketPlayInUseEntity.EnumEntityUseAction getType:a();
     #require net.minecraft.network.protocol.game.PacketPlayInUseEntity.d private final readonly net.minecraft.world.EnumHand interactHand:hand;
     #require net.minecraft.network.protocol.game.PacketPlayInUseEntity.e private final readonly net.minecraft.world.EnumHand interactAtHand:hand;
@@ -312,6 +321,7 @@ class PacketPlayInUseEntity extends Packet {
     #require net.minecraft.network.protocol.game.PacketPlayInUseEntity public String getActionName() {
         return instance#action#getType().name();
     }
+  #endif
 
     public boolean isInteract() {
         return instance#getActionName().equals("INTERACT");
@@ -327,12 +337,24 @@ class PacketPlayInUseEntity extends Packet {
 
     public com.bergerkiller.bukkit.common.wrappers.HumanHand getInteractHand(org.bukkit.entity.HumanEntity humanEntity) {
         EnumHand hand;
+  #if version >= 1.19.4
+        String name = instance.getActionType().name();
+  #else
         Object useAction = instance#action;
         String name = useAction#getType().name();
+  #endif
         if (name.equals("INTERACT")) {
+  #if version >= 1.19.4
+            hand = ((net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAction) instance#action)#interactHand;
+  #else
             hand = useAction#interactHand;
+  #endif
         } else if (name.equals("INTERACT_AT")) {
+  #if version >= 1.19.4
+            hand = ((net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAtLocationAction) instance#action)#interactAtHand;
+  #else
             hand = useAction#interactAtHand;
+  #endif
         } else {
             return null;
         }
@@ -341,12 +363,20 @@ class PacketPlayInUseEntity extends Packet {
     }
 
     public (org.bukkit.util.Vector) Vec3D getInteractAtPosition() {
+  #if version >= 1.19.4
+        if (instance.getActionType().name().equals("INTERACT_AT")) {
+            return ((net.minecraft.network.protocol.game.ServerboundInteractPacket.InteractionAtLocationAction) instance#action)#interactAtLocation;
+        } else {
+            return null;
+        }
+  #else
         Object useAction = instance#action;
         if (useAction#getType().name().equals("INTERACT_AT")) {
             return useAction#interactAtLocation;
         } else {
             return null;
         }
+  #endif
     }
 
     public void setAttack() {
@@ -2186,7 +2216,11 @@ class PacketPlayOutEntityMetadata extends Packet {
 }
 
 class PacketPlayOutUpdateAttributes extends Packet {
+#if version >= 1.17
+    private int entityId;
+#else
     private int entityId:a;
+#endif
 
     public static (PacketPlayOutUpdateAttributesHandle) PacketPlayOutUpdateAttributes createNew(int entityId, (java.util.Collection<AttributeModifiableHandle>) java.util.Collection<AttributeModifiable> attributes) {
         return new PacketPlayOutUpdateAttributes(entityId, attributes);

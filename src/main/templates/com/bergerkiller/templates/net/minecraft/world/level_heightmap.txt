@@ -130,7 +130,11 @@ class HeightMap {
                 databits[databits_index++] = (char) (y+1);
   #else
                 // Standard spigot
+    #if version >= 1.18
+                databits.set(databits_index++, y+1);
+    #else
                 databits.a(databits_index++, y+1);
+    #endif
   #endif
             }
         }
