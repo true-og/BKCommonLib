@@ -1,128 +1,37 @@
 package com.bergerkiller.bukkit.common.internal;
 
-import com.bergerkiller.bukkit.common.ToggledState;
 import com.bergerkiller.bukkit.common.utils.StringUtil;
-import net.milkbowl.vault.permission.Permission;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.RegisteredServiceProvider;
 
 import java.util.Locale;
 
 /**
- * Takes care of Vault permission checks, and additional logic needed to handle
- * permissions. It's main purpose is redirecting permission checks and providing
- * *-wildcard support.
+ * Handles permission checks with *-wildcard support. LuckPerms is the
+ * supported permission backend; when present it registers Bukkit super-perms
+ * attachments which make {@link CommandSender#hasPermission(String)} fully
+ * context-aware (world, server, etc), and it natively expands *-nodes so the
+ * recursive wildcard fallback is bypassed.
  */
 public class PermissionHandler implements PermissionChecker {
 
-    private static final String PERMISSION_TEST_NODE_ROOT = "bkcommonlib.permission.testnode";
-    private static final String PERMISSION_TEST_NODE = PERMISSION_TEST_NODE_ROOT + ".test";
-    private static final String PERMISSION_TEST_NODE_ALL = PERMISSION_TEST_NODE_ROOT + ".*";
     private boolean hasSuperWildcardSupport = false;
-    private final ToggledState needsWildcardCheck = new ToggledState(false);
-    private boolean vaultEnabled = false;
-    private Permission vaultPermission = null;
 
     public void updateDependency(Plugin plugin, String pluginName, boolean enabled) {
-        if (pluginName.equals("Vault")) {
-            if (this.vaultEnabled == enabled) {
-                return;
-            }
-            if (enabled) {
-                // Enable the support for Vault
-                RegisteredServiceProvider<Permission> permissionProvider = Bukkit.getServicesManager().getRegistration(Permission.class);
-                if (permissionProvider != null) {
-                    this.vaultPermission = permissionProvider.getProvider();
-                    this.vaultEnabled = this.vaultPermission != null;
-                }
-            } else {
-                // Disable the support for Vault
-                this.vaultPermission = null;
-                this.vaultEnabled = false;
-            }
-            if (this.vaultEnabled) {
-                this.needsWildcardCheck.set();
-            }
-        } else if (pluginName.equals("LuckPerms") && enabled) {
-            // LuckPerms handles *-logic for us, no need to do stuff ourselves
+        if (pluginName.equals("LuckPerms") && enabled) {
+            // LuckPerms expands *-nodes natively, no need for the recursive fallback
             hasSuperWildcardSupport = true;
-            needsWildcardCheck.clear();
         }
     }
 
-    @SuppressWarnings("deprecation")
-    private boolean hasSuperWildcardSupport() {
-        if (this.needsWildcardCheck.clear()) {
-            this.hasSuperWildcardSupport = false;
-
-            // Bugfix for UPerms: hangs on retrieving the non-existent player profile name
-            if (this.vaultPermission.getClass().getName().equals("me.TechsCode.UltraPermissions.hooks.pluginHooks.VaultPermissionHook")) {
-                this.hasSuperWildcardSupport = true; // Appears to support it
-                return this.hasSuperWildcardSupport;
-            }
-
-            // LuckPerms supports wildcards
-            if (this.vaultPermission.getClass().getName().equals("me.lucko.luckperms.bukkit.vault.LuckPermsVaultPermission")) {
-                this.hasSuperWildcardSupport = true;
-                return this.hasSuperWildcardSupport;
-            }
-
-            // Perform a little experiment with a random player name
-            // Give the player a test node, and see if the *-permission is handled right
-            // Also pass in an invalid value to check that there are no inconsistencies
-            // Set up the test permission
-            org.bukkit.permissions.Permission perm = getPermission(PERMISSION_TEST_NODE);
-            perm.setDefault(PermissionDefault.FALSE);
-
-            // Find a player that does not have the test permission (this is kinda pointless, but hey, we are secure!)
-            final int maxTries = 10000;
-            final String world = null;
-            final String testPlayerNameBase = "TestPlayer";
-            StringBuilder testPlayerNameBldr = new StringBuilder(testPlayerNameBase);
-            String testPlayerName = testPlayerNameBase;
-            int i;
-            for (i = 0; i < maxTries; i++) {
-                testPlayerNameBldr.setLength(testPlayerNameBase.length());
-                testPlayerNameBldr.append(i);
-                testPlayerName = testPlayerNameBldr.toString();
-                try {
-                    if (!this.vaultPermission.playerHas(world, testPlayerName, PERMISSION_TEST_NODE)) {
-                        break;
-                    }
-                } catch (Throwable t) {
-                    // Failure
-                    i = maxTries;
-                }
-            }
-            // Check for permission failure (perhaps there is a consistent permission thing)
-            if (i < (maxTries - 1)) {
-                try {
-                    // Grant permission with the *-node
-                    this.vaultPermission.playerAdd(world, testPlayerName, PERMISSION_TEST_NODE_ALL);
-
-                    // Adding was successful, ALWAYS do the removal phase
-                    // See if it had the desired effect
-                    try {
-                        this.hasSuperWildcardSupport = this.vaultPermission.playerHas(world, testPlayerName, PERMISSION_TEST_NODE);
-                    } catch (Throwable t) {
-                    }
-                    // Undo permission change
-                    try {
-                        this.vaultPermission.playerRemove(world, testPlayerName, PERMISSION_TEST_NODE_ALL);
-                    } catch (Throwable t) {
-                    }
-                } catch (Throwable t) {
-                }
-            }
-
-            // Undo the previously added Bukkit Permission
-            Bukkit.getPluginManager().removePermission(perm);
-        }
-        return this.hasSuperWildcardSupport;
+    @Override
+    public boolean handlePermission(CommandSender sender, String permission) {
+        // Ensure the Bukkit Permission exists so its default applies to non-permission-plugin
+        // scenarios (e.g. console with no LuckPerms loaded, or unconfigured nodes)
+        getPermission(permission);
+        return sender.hasPermission(permission);
     }
 
     public org.bukkit.permissions.Permission getPermission(String node) {
@@ -148,37 +57,8 @@ public class PermissionHandler implements PermissionChecker {
         return perm;
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public boolean handlePermission(CommandSender sender, String permission) {
-        // Initialize the permission (and it's default) prior to check
-        org.bukkit.permissions.Permission perm = getPermission(permission);
-
-        // Resort back to the default logic
-        if (this.vaultEnabled) {
-            // On a new line to avoid possible preliminary field access
-            if (!this.vaultPermission.hasSuperPermsCompat()) {
-                // Use a call here
-                // First, make sure to handle our permission defaults
-                if (perm.getDefault().getValue(sender.isOp())) {
-                    return true;
-                }
-
-                // Handle the remainder using Vault
-                if (sender instanceof Player) {
-                    Player p = (Player) sender;
-                    return this.vaultPermission.playerHas(p.getWorld(), p.getName(), permission);
-                } else {
-                    return this.vaultPermission.has(sender, permission);
-                }
-            }
-        }
-        // Resort to the simpler Bukkit Super Permissions
-        return sender.hasPermission(permission);
-    }
-
     public boolean hasPermission(CommandSender sender, String[] permissionNode) {
-        if (hasSuperWildcardSupport()) {
+        if (hasSuperWildcardSupport) {
             return handlePermission(sender, StringUtil.join(".", permissionNode).toLowerCase(Locale.ENGLISH));
         }
         return permCheckWildcard(this, sender, permissionNode);
@@ -190,7 +70,7 @@ public class PermissionHandler implements PermissionChecker {
             return true;
         }
         // Only if no *-wildcard support is available internally do we check that as well
-        return !hasSuperWildcardSupport() && permCheckWildcard(this, sender, lowerNode);
+        return !hasSuperWildcardSupport && permCheckWildcard(this, sender, lowerNode);
     }
 
     private static boolean permCheckWildcard(PermissionChecker checker, CommandSender sender, String node) {

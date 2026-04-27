@@ -256,8 +256,8 @@ public class CommonUtil {
 
     /**
      * Checks whether a given command sender has a given permission<br>
-     * Vault is used for permissions if available, otherwise super permissions
-     * are used
+     * LuckPerms is the supported permission backend; falls back to Bukkit
+     * super permissions when not present
      *
      * @param sender to check
      * @param permissionNode to check (each part is appended with '.' in
@@ -288,8 +288,8 @@ public class CommonUtil {
 
     /**
      * Checks whether a given command sender has a given permission<br>
-     * Vault is used for permissions if available, otherwise super permissions
-     * are used
+     * LuckPerms is the supported permission backend; falls back to Bukkit
+     * super permissions when not present
      *
      * @param sender to check
      * @param permissionNode to check

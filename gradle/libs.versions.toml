@@ -8,7 +8,6 @@ regionchangetracker = "1.2"
 timings = "1.0.4"
 gson = "2.8.9"
 viaversion = "4.0.0"
-vault = "1.7"
 protocollib = "4.4.0"
 cloud = "1.8.0-SNAPSHOT"
 commodore = "1.13"
@@ -28,7 +27,6 @@ regionchangetracker = { module = "com.bergerkiller.bukkit.regionchangetracker:BK
 timings = { module = "co.aikar:minecraft-timings", version.ref = "timings" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 viaversion = { module = "com.viaversion:viaversion-api", version.ref = "viaversion" }
-vault = { module = "com.github.MilkBowl:VaultAPI", version.ref = "vault" }
 protocollib = { module = "com.comphenix.protocol:ProtocolLib-API", version.ref = "protocollib" }
 cloud-paper = { module = "org.bergerhealer.cloud.commandframework:cloud-paper", version.ref = "cloud" }
 cloud-annotations = { module = "org.bergerhealer.cloud.commandframework:cloud-annotations", version.ref = "cloud" }

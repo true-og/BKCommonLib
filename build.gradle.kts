@@ -134,7 +134,6 @@ repositories {
     maven("https://jitpack.io")
 
     // Repo for TeamBergerhealer plugins, modules and several of its (soft) dependencies. Also used for:
-    // - Milkbowl Vault
     // - Comphenix ProtocolLib
     // - Aikar minecraft-timings
     // - Myles ViaVersion
@@ -183,8 +182,6 @@ dependencies {
 
     // ViaVersion API
     compileOnly(libs.viaversion)
-    // Vault hook for special permissions handling
-    compileOnly(libs.vault)
     // ProtocolLib hook for protocol handling
     compileOnly(libs.protocollib)
 
