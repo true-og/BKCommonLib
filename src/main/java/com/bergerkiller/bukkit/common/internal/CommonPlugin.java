@@ -579,17 +579,14 @@ public class CommonPlugin extends PluginBase {
             Logging.LOGGER_REFLECTION.log(Level.SEVERE, "Failed to initialize some critical components", t);
         }
 
-        // Load configuration
+        // Load configuration. Canonical config.yml is shaded into the jar and copied
+        // to the data folder on first run; values are read-only thereafter.
+        if (!new File(getDataFolder(), "config.yml").exists()) {
+            saveResource("config.yml", false);
+        }
         FileConfiguration config = new FileConfiguration(this);
         config.load();
-        config.setHeader("This is the main configuration file of BKCommonLib");
-        config.addHeader("Normally you should not have to make changes to this file");
-        config.addHeader("Unused components of the library can be disabled to improve performance");
-        config.addHeader("By default all components and features are enabled");
 
-        config.setHeader("enableMapDisplays", "\nWhether the Map Display engine is enabled, running in the background to refresh and render maps");
-        config.addHeader("enableMapDisplays", "When enabled, the map item tracking may impose a slight overhead");
-        config.addHeader("enableMapDisplays", "If no plugin is using map displays, then this can be safely disabled to improve performance");
         this.isMapDisplaysEnabled = config.get("enableMapDisplays", true);
 
         // If java.awt is not available, the map display API won't work. Just disable it, and log an error.
@@ -601,42 +598,13 @@ public class CommonPlugin extends PluginBase {
             Logging.LOGGER_MAPDISPLAY.log(Level.SEVERE, "Please install and configure a non-headless JVM to have Map Displays work");
         }
 
-        config.setHeader("enableItemFrameDisplays", "\nWhether all item frames on the server are tracked to see if they display a map display.");
-        config.addHeader("enableItemFrameDisplays", "This allows for map displays to be displayed on item frames and interacted with.");
-        config.addHeader("enableItemFrameDisplays", "If 'enableItemFrameTiling' is also true, then this allows for multi-item frame displays.");
-        config.addHeader("enableItemFrameDisplays", "Tracking the existence of all item frames on the server can pose an overhead, as");
-        config.addHeader("enableItemFrameDisplays", "shown under the 'MapDisplayFramedMapUpdater' task. Turning this off can help performance.");
-        config.addHeader("enableItemFrameDisplays", "If 'enableMapDisplays' is true then player-held maps will continue working fine.");
         this.isFrameDisplaysEnabled = config.get("enableItemFrameDisplays", true);
-        config.setHeader("enableItemFrameTiling", "\nWhether multiple item frames next to each other can merge to show one large display");
-        config.addHeader("enableItemFrameTiling", "This allows Map Displays to be displayed on multiple item frames at a larger resolution");
-        config.addHeader("enableItemFrameTiling", "The tiling detection logic poses some overhead on the server, and if unused, can be disabled");
         this.isFrameTilingSupported = config.get("enableItemFrameTiling", true);
-        config.setHeader("teleportPlayersToSeat", "\nWhether to teleport players to their supposed seat while they hold the sneak button");
-        config.addHeader("teleportPlayersToSeat", "This is used on Minecraft 1.16 and later to make sure players stay near their seat,");
-        config.addHeader("teleportPlayersToSeat", "when exiting the seat was cancelled.");
         this.teleportPlayersToSeat = config.get("teleportPlayersToSeat", true);
-        config.setHeader("forceSynchronousSaving", "\nWhether to force saving to be done synchronously, rather than asynchronously");
-        config.addHeader("forceSynchronousSaving", "If the Asynchronous File I/O in the JVM has a glitch in it, it might cause very large");
-        config.addHeader("forceSynchronousSaving", "corrupt (.yml) files to be generated. On server restart this can cause a loss of data.");
-        config.addHeader("forceSynchronousSaving", "Synchronous saving (such as YAML) may hurt server performance for large files,");
-        config.addHeader("forceSynchronousSaving", "but will prevent these issues from happening.");
         this.forceSynchronousSaving = config.get("forceSynchronousSaving", false);
-        config.setHeader("cloudDisableBrigadier", "\nWhether to disable using brigadier for all plugins that use BKCL's cloud command framework");
-        config.addHeader("cloudDisableBrigadier", "This might fix problems that occur because of bugs in brigadier, or cloud's handler of it");
         this.cloudDisableBrigadier = config.get("cloudDisableBrigadier", false);
-        config.setHeader("preloadTemplateClasses", "\nWhether to load and initialize ALL template classes when BKCommonLib first loads up.");
-        config.addHeader("preloadTemplateClasses", "This reveals any at-runtime server incompatibility errors early on and eliminates any");
-        config.addHeader("preloadTemplateClasses", "at-runtime lazy initialization lag. It does cause a lot of classes to be loaded into the");
-        config.addHeader("preloadTemplateClasses", "JVM that may never get used, which wastes memory. Only enable this for debugging reasons!");
-        config.addHeader("preloadTemplateClasses", "As loading is done on all CPU cores, this might improve boot performance on multi-core systems");
         final boolean preloadTemplateClasses = config.get("preloadTemplateClasses", false);
-        config.setHeader("trackForcedChunkCreationStack", "\nWhether to track the stack trace of where forced chunks are created");
-        config.addHeader("trackForcedChunkCreationStack", "This is useful to detect ForcedChunk instances that are not closed by the developer.");
-        config.addHeader("trackForcedChunkCreationStack", "Once a missed close is detected, tracking is automatically started anyway.");
-        config.addHeader("trackForcedChunkCreationStack", "As such, this option is primarily useful to diagnose this problem at server startup");
         boolean trackForcedChunkCreationStack = config.get("trackForcedChunkCreationStack", false);
-        config.save();
 
         if (preloadTemplateClasses) {
             CommonClasses.initializeTemplateClasses();
